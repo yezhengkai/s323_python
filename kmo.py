@@ -58,7 +58,7 @@ sta_dict = [
 
 # so you can use blew to call station lon and lat
 # -----------------
-# staname=next((item for item in stations if item["namesta"] == "VNAS"))
+# staname=next((item for item in sta_dict if item["namesta"] == "VNAS"))
 # print(staname['lon'])
 # -----------------
 ####### station #######
@@ -71,9 +71,13 @@ import obspy
 from obspy.core.event import read_events # for read catalog/event 
 from obspy.core import UTCDateTime # for time format and read
 from obspy.core import read # read seismic data to obspy stream
+from obspy.io.sac.util import obspy_to_sac_header # for obspy to sac header
+from obspy.geodetics.base import gps2dist_azimuth
+from obspy.taup import TauPyModel
+from obspy.geodetics.base import locations2degrees
 import shutil # for move file to folder
 
-
+model = TauPyModel(model="iasp91")
 startTime = datetime.now() # script start time  
 
 
@@ -162,9 +166,10 @@ for eventss in cata_xml:
 
 # our seismic data is miniseed format, 
 # and name format is like as "VNAS.HHZ.2016.047"
-
+    
+    
   # filename is like VNAS.HHZ.2016.047
-  mseeds =str(staid)+"."+str(compp)+"."+str(dt.year)+"."+str(dt.julday).zfill(3)
+  mseeds = str(staid)+"."+str(compp)+"."+str(dt.year)+"."+str(dt.julday).zfill(3)
 #  print(mseeds)
 
   
@@ -175,14 +180,37 @@ for eventss in cata_xml:
     st.merge(fill_value=0)
     # after cut, new file name     
     fnc = mseeds+".sac.new."+str(dt.month).zfill(2)+str(dt.day).zfill(2)+str(dt.hour).zfill(2)+str(dt.minute).zfill(2)+".cut"
-    st.write(fnc, format="SAC")  # output waveform for sac format
-#    subprocess.call('echo "r "%s";trans from polezero s "%s" freq 0.02 0.03 9 10;w append .gg ;q" | sac'%(fnc, sacpz), shell=True)
+
+    ttr = st[0]
+    ttr.stats.sac=obspy_to_sac_header(ttr.stats)
+    staname=next((item for item in sta_dict if item["namesta"] == ttr.stats.sac.kstnm))
+    ttr.stats.sac.stla=staname['lat']
+    ttr.stats.sac.stlo=staname['lon']
+    ttr.stats.sac.evlo=event_lon
+    ttr.stats.sac.evla=event_lat
+    ttr.stats.sac.evdp=event_dep/1000
+    arrivals = model.get_travel_times(source_depth_in_km=55,distance_in_degree=67)
+    ttr.stats.sac.o = event_time - ttr.stats.starttime
+#    distance_in_degree = locations2degrees(
+#                    event_latitude, event_longitude,
+#                    station_latitude, station_longitude)
+   # reference github NoisePy/Spec_test001.py
+   # reference github Process_HiCLIMB/download_data.py
+
+   # dist, az, baz=gps2dist_azimuth(event_lat, event_lon, staname['lat'], staname['lon'])
+   # ttr.stats.sac.az=az
+   # ttr.stats.sac.baz=baz
+   # ttr.stats.sac.dist=dist/1000   # m to km
+   # ttr.stats.distance=dist/1000   # m to km
+   # print(dist,az,baz,fnc)
+    st.write(fnc, format="SAC", lcalda=True)  # output waveform for sac format
+    subprocess.call('echo "r "%s";trans from polezero s "%s" freq 0.02 0.03 9 10;w over;q" | sac'%(fnc, sacpz), shell=True)
 #    sac transfer usage https://ds.iris.edu/files/sac-manual/commands/transfer.html
 #    example https://seiscode.iris.washington.edu/projects/sac/wiki/Instrument_response_removal_using_Polezero_files
 #    a suggestr rule-of-thumb is f1 ,= f2/2 and f4 >= 2*f3.
 #    
     dirr = str(dt.julday).zfill(3)   # folder for cut data
-   
+
     # do below you have to clear old folder for cut file first!
     if not os.path.isdir(dirr):      # if folder not exist
       os.mkdir(dirr)                 # create folder
