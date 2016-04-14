@@ -4,7 +4,7 @@
 # use obspy to do routine seismic data processing
 #
 # environment 
-# os:linuxmint14.04.3
+# os:linuxmint17.3 64
 # pyenv-> anaconda3-2.5.0-> obspy 1.0.1
 #
 # folder inside should be miniseed file name like VNAS.HHZ.2016.047
@@ -152,7 +152,7 @@ for eventss in cata_xml:
 # and name format is like as "VNAS.HHZ.2016.047"
 
 
-  mseeds =".HHZ."+str(dt.year)+"."+str(dt.julday).zfill(3)
+  mseeds ="VNAS.HHZ."+str(dt.year)+"."+str(dt.julday).zfill(3)
 #  files = [f for f in os.listdir(mseeds) if os.path.isfile(f)]
 #  for f in files:
 #    print f
