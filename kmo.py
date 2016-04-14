@@ -8,11 +8,12 @@
 # pyenv-> anaconda3-2.5.0-> obspy 1.0.1
 #
 # folder inside should be miniseed file name like VNAS.HHZ.2016.047
-#
-###########################################
+# !! Notice you need to remove old folder (001,001_2 ...)
+#    ex: rm `ls -d ???/ && ls -d ???_*/`
+#==========================================
 # Monkey 2013 master thesis page 24 
 # about 801H stations in philippine
-###########################################
+#==========================================
 #表 3.1 本研究架設之 801H 地震測站
 #測站名稱 經度(°E) 緯度(°N) 海拔(m) 架設時間
 #ABRA 120.7516 13.4440 45 2010/4
@@ -25,13 +26,22 @@
 #MAMB 120.6071 13.2228 47 2010/4
 #PALU 120.4300 13.4436 128 2010/4
 #SANT 120.8344 12.9964 20 2010/4
-###########################################
+#==========================================
 # Broadband in #ABRA #MAMB #PALU #SANT 
 # same location
 # And PGPB from IES ( PGPB unkown evalatin )
 # VNAS from BATS
-###########################################
+#==========================================
 
+# need to modify for your data
+# filename like VNAS.HHZ.2016.047, staid is "VNAS"
+staid='VNAS'
+
+# this script just to processing one component, but you can modify
+compp='HHZ'
+
+# pole-zero file for removing instrument respones 
+sacpz='SAC_PZs_TW_VNAS_HHZ__2014.150'
 
 ####### station #######
 # python list of dictionaries search 
@@ -53,16 +63,18 @@ sta_dict = [
 # -----------------
 ####### station #######
 
+import os
 import glob # for read multi-data 
 import subprocess # for linux command inside
 from datetime import datetime # for calculate script processing time 
 import obspy
 from obspy.core.event import read_events # for read catalog/event 
 from obspy.core import UTCDateTime # for time format and read
+from obspy.core import read # read seismic data to obspy stream
+import shutil # for move file to folder
 
-startTime = datetime.now() 
 
-
+startTime = datetime.now() # script start time  
 
 
 
@@ -151,20 +163,45 @@ for eventss in cata_xml:
 # our seismic data is miniseed format, 
 # and name format is like as "VNAS.HHZ.2016.047"
 
+  # filename is like VNAS.HHZ.2016.047
+  mseeds =str(staid)+"."+str(compp)+"."+str(dt.year)+"."+str(dt.julday).zfill(3)
+#  print(mseeds)
 
-  mseeds ="VNAS.HHZ."+str(dt.year)+"."+str(dt.julday).zfill(3)
-#  files = [f for f in os.listdir(mseeds) if os.path.isfile(f)]
-#  for f in files:
-#    print f
+  
+  if os.path.isfile(mseeds):      #if miniseed file exist, then do below
+    st = read(mseeds)             # read miniseed data use obspy stream
+    st.trim(dt-60*5, dt+60*20)    # cut data before 5 min catalog time and after 20 min
+    # one stream may have manay trace, merge them and gap fill 0
+    st.merge(fill_value=0)
+    # after cut, new file name     
+    fnc = mseeds+".sac.new."+str(dt.month).zfill(2)+str(dt.day).zfill(2)+str(dt.hour).zfill(2)+str(dt.minute).zfill(2)+".cut"
+    st.write(fnc, format="SAC")  # output waveform for sac format
+#    subprocess.call('echo "r "%s";trans from polezero s "%s" freq 0.02 0.03 9 10;w append .gg ;q" | sac'%(fnc, sacpz), shell=True)
+#    sac transfer usage https://ds.iris.edu/files/sac-manual/commands/transfer.html
+#    example https://seiscode.iris.washington.edu/projects/sac/wiki/Instrument_response_removal_using_Polezero_files
+#    a suggestr rule-of-thumb is f1 ,= f2/2 and f4 >= 2*f3.
+#    
+    dirr = str(dt.julday).zfill(3)   # folder for cut data
+   
+    # do below you have to clear old folder for cut file first!
+    if not os.path.isdir(dirr):      # if folder not exist
+      os.mkdir(dirr)                 # create folder
+      shutil.move(fnc, dirr)         # move cut file to julia folder
+      print("Move "+fnc+" to "+dirr)
+      cnt=1                          # initial count = 1
+    else:
+    # else mean folder exist, and auto plus 1 to like as 001_2
+      cnt =cnt+ 1                    
+      ndirr=str(dirr)+"_"+str(cnt)
+      os.mkdir(ndirr)
+      shutil.move(fnc, ndirr)
+      print("Move "+fnc+" to "+ndirr)
+  else:
+    print("No such file " + mseeds+" to cut event "+str(dt.month).zfill(2)+str(dt.day).zfill(2)+str(dt.hour).zfill(2)+str(dt.minute).zfill(2) )
 
-#  out=subprocess.check_output('ls ????"%s" '%(mseeds), shell=False)
-#  print(out)
-#  mseeds = 'VNAS.HHZ.'+str(dt.year)+"."+str(dt.julday).zfill(3)
-# it should be
-#  print(glob.glob("*.HHZ"+str(dt.year)+"."+str(dt.julday).zfill(3)))
 
 
 
 
-print (datetime.now() - startTime)
+print ('this python script cost '+str(datetime.now() - startTime))
 
